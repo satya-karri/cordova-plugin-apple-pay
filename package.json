@@ -1,0 +1,19 @@
+{
+  "name": "cordova-plugin-apple-pay",
+  "version": "1.0.0",
+  "description": "Cordova plugin for integrating Apple Pay in modern cordova apps",
+  "cordova": {
+    "id": "cordova-plugin-apple-pay",
+    "platforms": [
+      "ios"
+    ]
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-ios",
+    "applepay",
+    "apple pay"
+  ],
+  "author": "Satya Venkata Reddy Karri",
+  "license": "ISC"
+}
