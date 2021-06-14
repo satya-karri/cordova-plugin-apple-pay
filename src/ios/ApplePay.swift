@@ -1,6 +1,7 @@
 import Foundation
 import PassKit
 
+@available(iOS 11.0, *)
 @objc(ApplePay) class ApplePay : CDVPlugin, PKPaymentAuthorizationViewControllerDelegate {
     var paymentCallbackId : String?
     var successfulPayment = false
@@ -12,10 +13,10 @@ import PassKit
         let callbackID = command.callbackId;
         
         do {
-            let supportedNetworks = try getFromRequest(fromArguments: command.arguments, key: "supportedNetworks") as! Array
-            let merchantCapabilities = try getFromRequest(fromArguments: command.arguments, key: "merchantCapabilities") as! Array
+            let supportedNetworks = try getFromRequest(fromArguments: command.arguments, key: "supportedNetworks") as! Array<PKPaymentNetwork>
+            let merchantCapabilities = try getFromRequest(fromArguments: command.arguments, key: "merchantCapabilities") as! PKMerchantCapability
 
-            let canMakePayments = PKPaymentAuthorizationViewController.canMakePayments(supportedNetworks, merchantCapabilities)
+            let canMakePayments = PKPaymentAuthorizationViewController.canMakePayments(usingNetworks: supportedNetworks, capabilities: merchantCapabilities)
 
             let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: canMakePayments)
             commandDelegate.send(result, callbackId: callbackID)
@@ -36,10 +37,10 @@ import PassKit
             let countryCode = try getFromRequest(fromArguments: command.arguments, key: "countryCode") as! String
             let currencyCode = try getFromRequest(fromArguments: command.arguments, key: "currencyCode") as! String
             let merchantId = try getFromRequest(fromArguments: command.arguments, key: "merchantId") as! String
-            let merchantCapabilities = try getFromRequest(fromArguments: command.arguments, key: "merchantCapabilities") as! Array
-            let requiredBillingContactFields = try getFromRequest(fromArguments: command.arguments, key: "requiredBillingContactFields") as! Array
-            let requiredShippingContactFields = try getFromRequest(fromArguments: command.arguments, key: "requiredShippingContactFields") as! Array
-            let supportedNetworks = try getFromRequest(fromArguments: command.arguments, key: "supportedNetworks") as! Array
+            let merchantCapabilities = try getFromRequest(fromArguments: command.arguments, key: "merchantCapabilities") as! PKMerchantCapability
+            let requiredBillingContactFields = try getFromRequest(fromArguments: command.arguments, key: "requiredBillingContactFields") as! Set<PKContactField>
+            let requiredShippingContactFields = try getFromRequest(fromArguments: command.arguments, key: "requiredShippingContactFields") as! Set<PKContactField>
+            let supportedNetworks = try getFromRequest(fromArguments: command.arguments, key: "supportedNetworks") as! Array<PKPaymentNetwork>
             let totalLabel = try getFromRequest(fromArguments: command.arguments, key: "totalLabel") as! String
             let totalAmount = try getFromRequest(fromArguments: command.arguments, key: "totalAmount") as! NSNumber
             
