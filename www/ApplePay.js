@@ -12,7 +12,7 @@ var executeCallback = function(callback, message) {
  * @param {Function} [errorCallback] - Optional error callback, recieves message object.
  * @returns {Promise}
  */
-exports.canMakePayments = function(successCallback, errorCallback) {
+exports.canMakePayments = function(data, successCallback, errorCallback) {
     return new Promise(function(resolve, reject) {
         exec(function(message) {
             executeCallback(successCallback, message);
@@ -20,7 +20,7 @@ exports.canMakePayments = function(successCallback, errorCallback) {
         }, function(message) {
             executeCallback(errorCallback, message);
             reject(message);
-        }, 'ApplePay', 'canMakePayments', []);
+        }, 'ApplePay', 'canMakePayments', [data]);
     });
 };
 
@@ -42,3 +42,15 @@ exports.makePaymentRequest = function(order, successCallback, errorCallback) {
         }, 'ApplePay', 'makePaymentRequest', [order]);
     });
 };
+
+exports.updatePaymentStatus = function(status, successCallback, errorCallback) {
+    return new Promise(function(resolve, reject) {
+        exec(function(message) {
+            executeCallback(successCallback, message);
+            resolve(message);
+        }, function(message) {
+            executeCallback(errorCallback, message);
+            reject(message);
+        }, 'ApplePay', 'updatePaymentStatus', [status]);
+    });
+}
