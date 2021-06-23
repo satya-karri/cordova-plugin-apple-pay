@@ -11,7 +11,6 @@ config.xml:
 
 ```
 <platform name="ios">
-
   <config-file target="*-Debug.plist" parent="com.apple.developer.in-app-payments">
     <array>
       <string>developer merchant ID here</string>
@@ -28,43 +27,73 @@ config.xml:
 
 ## Usage
 
-`canMakePayments()` checks whether device is capable to make payments via Apple Pay or Google Pay.
+`canMakePayments()` checks whether device is capable to make payments via Apple Pay.
 
 ```
-// use as plain Promise
-async function checkForApplePayOrGooglePay(){
-    let isAvailable = await cordova.plugins.ApplePayGooglePay.canMakePayments()
+let request = {
+  "supportedNetworks": [
+    "visa",
+    "masterCard",
+    "amex",
+    "discover"
+  ],
+  "merchantCapabilities": [
+    "supports3DS"
+  ]
 }
 
-// OR
-let available;
-
-cordova.plugins.ApplePayGooglePay.canMakePayments((r) => {
-  available = r
-})
+ApplePay.canMakePayments(request).then(successCallback).catch(errorCallback);
 ```
 
 `makePaymentRequest()` initiates pay session.
 
 ```
 let request = {
-    merchantId: 'merchant.com.example', // obtain it from https://developer.apple.com/account/resources/identifiers/list/merchant
-    purpose: `Payment for your order #1`,
-    amount: 100,
-    countryCode: "US",
-    currencyCode: "USD"
+  "supportedNetworks": [
+    "visa",
+    "masterCard",
+    "amex",
+    "discover"
+  ],
+  "merchantCapabilities": [
+    "supports3DS"
+  ],
+  "merchantId": "",
+  "currencyCode": "",
+  "countryCode": "",
+  "requiredBillingContactFields": [
+    "name",
+    "postalAddress"
+  ],
+  "requiredShippingContactFields": [
+    "name",
+    "postalAddress"
+  ],
+  "totalLabel": "",
+  "totalAmount": 
 }
 
-cordova.plugins.ApplePayGooglePay.makePaymentRequest(request, r => {
-        // in success callback, raw response as encoded JSON is returned. Pass it to your payment processor as is.
-      let responseString = r
+var successCallback = function (data) {
+  var applePayData = data[0];
+  var tokenPaymentData = data[1];
+  var paymentData = JSON.parse(applePayData);
+  paymentData.token.paymentData = JSON.parse(tokenPaymentData);
 
-      },
-      r => {
-        // in error callback, error message is returned.
-        // it will be "Payment cancelled" if used pressed Cancel button.
-      }
-   )
+  // send the paymentdata object to the backend
+}
+ApplePay.makePaymentRequest(request).then(successCallback).catch(errorCallback);
 ```
 
-All parameters in request object are required.
+All parameters in request object are required except requiredShippingContactFields and requiredBillingContactFields.
+
+
+
+`updatePaymentStatus()` updates the payment sheet if the payment has been successfully processed.
+
+```
+let request = {
+  "success": true,
+}
+ApplePay.updatePaymentStatus(request);
+
+```

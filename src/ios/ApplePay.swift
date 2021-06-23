@@ -4,8 +4,8 @@ import PassKit
 @available(iOS 11.0, *)
 @objc(ApplePay) class ApplePay : CDVPlugin, PKPaymentAuthorizationViewControllerDelegate {
     var paymentCallbackId : String?
-//    var completionHandler = nil;
-    var successfulPayment = false
+    var successfulPayment: Bool = false;
+    var paymentAuthorizationBlock : ((PKPaymentAuthorizationResult) -> Void)? = nil;
     
     /**
      * Check device for ApplePay capability
@@ -28,18 +28,29 @@ import PassKit
         }
     }
     
+    /**
+    * Update payment sheet status after processing the payment
+    **/
     @objc(updatePaymentStatus:) func updatePaymentStatus(command: CDVInvokedUrlCommand){
-//        let callbackId = command.callbackId;
-
-        successfulPayment = (((command.arguments?[0] as? [AnyHashable : Bool])?["success"]) != nil);
-
-//        if (successfulPayment) {
-//            PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.success, errors: nil);
-////            completionHandler(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.success, errors: nil))
-//        } else {
-//            PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.failure, errors: nil)
-////            completionHandler(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.failure))
-//        }
+        let callbackId = command.callbackId;
+        do {
+            successfulPayment = try getFromRequest(fromArguments: command.arguments, key: "success") as! Bool;
+            if ((self.paymentAuthorizationBlock) != nil) {
+                if (successfulPayment) {
+                    self.paymentAuthorizationBlock!(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.success, errors: nil));
+                } else {
+                    self.paymentAuthorizationBlock!(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.failure, errors: nil));
+                }
+                let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: true)
+                commandDelegate.send(result, callbackId: callbackId)
+            } else {
+                failWithError("could not update payment status", id: callbackId!)
+            }
+        } catch ValidationError.missingArgument(let message) {
+            failWithError(message, id: callbackId!)
+        } catch {
+           failWithError(error.localizedDescription, id: callbackId!)
+        }
     }
     
     /**
@@ -48,12 +59,13 @@ import PassKit
     @objc(makePaymentRequest: ) func makePaymentRequest(command: CDVInvokedUrlCommand){
         self.paymentCallbackId = command.callbackId;
         
+        self.paymentAuthorizationBlock = nil;
+        
         do {
             let countryCode = try getFromRequest(fromArguments: command.arguments, key: "countryCode") as! String
             let currencyCode = try getFromRequest(fromArguments: command.arguments, key: "currencyCode") as! String
             let merchantId = try getFromRequest(fromArguments: command.arguments, key: "merchantId") as! String
-            
-            
+
             let totalLabel = try getFromRequest(fromArguments: command.arguments, key: "totalLabel") as! String
             let totalAmount = try getFromRequest(fromArguments: command.arguments, key: "totalAmount") as! NSNumber
             
@@ -64,10 +76,8 @@ import PassKit
             request.countryCode = countryCode
             request.currencyCode = currencyCode
 
-            let requiredBillingContactFields: Set = [PKContactField.name, PKContactField.postalAddress];
-            let requiredShippingContactFields: Set = [PKContactField.emailAddress];
-            request.requiredBillingContactFields = requiredBillingContactFields
-            request.requiredShippingContactFields = requiredShippingContactFields
+            request.requiredBillingContactFields = getContactFields(fromArguments: command.arguments, key: "requiredBillingContactFields");
+            request.requiredShippingContactFields = getContactFields(fromArguments: command.arguments, key: "requiredShippingContactFields");
 
             let nsamount = NSDecimalNumber(decimal: totalAmount.decimalValue);
             
@@ -101,11 +111,41 @@ import PassKit
         return val!
     }
     
+    private func getContactFields(fromArguments arguments: [Any]?, key: String) -> Set<PKContactField> {
+        var contactFieldSet = Set<PKContactField>();
+        do {
+            let contactFields = try getFromRequest(fromArguments: arguments, key: key) as! Array<String>;
+            for contactField in contactFields {
+                switch contactField {
+                    case "postalAddress":
+                        contactFieldSet.insert(PKContactField.postalAddress);
+                        break;
+                    case "phoneticName":
+                        contactFieldSet.insert(PKContactField.phoneticName);
+                        break;
+                    case "email":
+                        contactFieldSet.insert(PKContactField.emailAddress);
+                        break;
+                    case "phone":
+                        contactFieldSet.insert(PKContactField.phoneNumber);
+                        break;
+                    case "name":
+                        contactFieldSet.insert(PKContactField.name);
+                        break;
+                    default:
+                        contactFieldSet.insert(PKContactField.name);
+                        break;
+                }
+            }
+        } catch {
+            // do nothing
+        }
+        return contactFieldSet;
+    }
+    
     private func getSupportedNetworks(fromArguments arguments: [Any]?) throws -> Array<PKPaymentNetwork> {
-        print(arguments)
-        let supportedNetworksasa = try getFromRequest(fromArguments: arguments, key: "supportedNetworks") as! Array<String>;
-        print(supportedNetworksasa);
-        let supportedNetworks = supportedNetworksasa.map { (network) -> PKPaymentNetwork in
+        let supportedNetworksArray = try getFromRequest(fromArguments: arguments, key: "supportedNetworks") as! Array<String>;
+        let supportedNetworks = supportedNetworksArray.map { (network) -> PKPaymentNetwork in
             switch network {
                 case "amex":
                     return PKPaymentNetwork.amex;
@@ -125,8 +165,6 @@ import PassKit
     private func getMerchantCapability(fromArguments arguments: [Any]?) throws -> PKMerchantCapability {
         let merchantCapabilities = try getFromRequest(fromArguments: arguments, key: "merchantCapabilities") as! Array<String>;
         
-        print(merchantCapabilities);
-    
         if (merchantCapabilities.count < 1) {
             return PKMerchantCapability.capability3DS;
         }
@@ -175,7 +213,7 @@ import PassKit
     
     func paymentAuthorizationViewController(_ controller: PKPaymentAuthorizationViewController, didAuthorizePayment payment: PKPayment, handler completion: @escaping (PKPaymentAuthorizationResult) -> Void) {
 
-//        completionHandler = completion;
+        self.paymentAuthorizationBlock = completion;
 
         var token = PaymentToken();
         token.transactionIdentifier = payment.token.transactionIdentifier;
@@ -188,28 +226,29 @@ import PassKit
         
         token.paymentData = String(data: payment.token.paymentData, encoding: .utf8);
         
+        let asas = String(data: payment.token.paymentData, encoding: .utf8);
+        
         var applePayData = ApplePayData();
         applePayData.billingContact = getContactObject(fromPKContact: payment.billingContact);
         applePayData.shippingContact = getContactObject(fromPKContact: payment.shippingContact);
         applePayData.token = token;
-
+        
         let jsonData = try! JSONEncoder().encode(applePayData)
         let applePaymentData = String(data: jsonData, encoding: .utf8);
-        let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: applePaymentData)
-        commandDelegate.send(result, callbackId: paymentCallbackId);
         
-        completion(PKPaymentAuthorizationResult(status: PKPaymentAuthorizationStatus.success, errors: nil))
-        successfulPayment = true
+        let resultArray = [applePaymentData,  asas];
+        let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: resultArray as [Any])
+        commandDelegate.send(result, callbackId: paymentCallbackId);
         
     }
     
     func paymentAuthorizationViewControllerDidFinish(_ controller: PKPaymentAuthorizationViewController) {
-        print("paymentAuthorizationViewControllerDidFinish");
+        controller.dismiss(animated: true, completion: nil);
+
         if (!successfulPayment) {
             let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: "Payment cancelled")
             commandDelegate.send(result, callbackId: paymentCallbackId)
         }
-        controller.dismiss(animated: true, completion: nil);
     }
 }
 
